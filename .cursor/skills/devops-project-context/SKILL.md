@@ -9,7 +9,7 @@ description: Applies the SurfaceX Attack Surface Intelligence DevOps constraints
 
 SurfaceX is a local-first Attack Surface Intelligence prototype for safe, recurring discovery of more than 10,000 authorized targets. It detects hosts, services, HTTP/TLS technologies and changes over time. It does not perform exploitation, authentication attempts or brute force.
 
-Read `docs/mvp-plan.md` for acceptance criteria and `docs/architecture.md` for component boundaries.
+Read `docs/architecture.md` for component boundaries.
 
 ## Fixed project decisions
 

@@ -13,7 +13,7 @@ export type ManagedUser = {
 const ROLES = ["admin", "operator", "analyst", "viewer"] as const;
 
 const ROLE_PERMISSIONS: Record<(typeof ROLES)[number], string[]> = {
-  // Keep in sync with the API permission classes (apps/scans/permissions.py) and docs/rbac.md.
+  // Keep in sync with the API permission classes (apps/scans/permissions.py) and docs/security.md.
   admin: [
     "Full access: targets, groups, scans, findings, export, allowlist.",
     "Manage users and roles.",

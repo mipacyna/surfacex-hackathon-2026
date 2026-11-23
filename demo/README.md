@@ -1,56 +1,41 @@
-# Laboratoria demonstracyjne SurfaceX
+# SurfaceX demo labs
 
-Trzy lokalne środowiska do testów i pokazu. Wszystkie usługi to atrapy (statyczne strony i banery, bez logowania i danych) w izolowanych sieciach Dockera. Kroki pokazu: [`docs/demo-script.md`](../docs/demo-script.md).
+Three local environments for testing and demos. All services are mock targets (static pages and banners, no logins or real data) in isolated Docker networks.
 
-| Laboratorium | Uruchomienie | Do czego |
+| Lab | Start | Purpose |
 |---|---|---|
-| `lab-target` | startuje razem ze stosem | pierwszy skan zaraz po instalacji |
-| `demo/lab` | `./demo/lab/lab.sh up` | pełny pokaz: dwa skany, zmiany, role |
-| `deploy/demo-lab` | `docker compose -f deploy/demo-lab/compose.yml up -d` | porty zmieniające się w czasie (`FLAKY`, `GONE`) |
+| `lab-target` | starts with the stack | first scan right after install |
+| `demo/lab` | `./demo/lab/lab.sh up` | full demo: two scans, changes, roles |
+| `deploy/demo-lab` | `docker compose -f deploy/demo-lab/compose.yml up -d` | ports that change over time (`FLAKY`, `GONE`) |
 
-## 1. `lab-target` — wbudowany cel
+## 1. `lab-target`: built-in target
 
-Usługa `lab-target` jest częścią `compose.yml` (sieć `scanner`, adres `172.30.0.10`): HTTP `80` i `8080`, TLS `443`, podstrony `/admin` i `/login`. Przy starcie API (`SEED_LAB_TARGET=1`) tworzy cele `lab-target.surfacex.local` i `172.30.0.10`, wpisy allowlisty oraz grupę **`lab-local`**. Podgląd z hosta: `http://127.0.0.1:18088`.
+Part of `compose.yml` (`scanner` network, address `172.30.0.10`): HTTP `80` and `8080`, TLS `443`, `/admin` and `/login` pages. On API start (`SEED_LAB_TARGET=1`) it creates the targets `lab-target.surfacex.local` and `172.30.0.10`, allowlist entries and the **`lab-local`** group. Host preview: `http://127.0.0.1:18088`.
 
-Użycie: zaznacz moduły na Dashboardzie i uruchom skan grupy `lab-local` w zakładce **Groups**.
+Select modules on the Dashboard and run a scan of `lab-local` from **Groups**.
 
-## 2. `demo/lab` — sieć siedmiu hostów
+## 2. `demo/lab`: seven-host network
 
 ```bash
-./demo/lab/lab.sh up       # start laboratorium + podłączenie workera SurfaceX do sieci asi-lab
-./demo/lab/lab.sh mutate   # zmiany między skanem 1 i 2
-./demo/lab/lab.sh down     # usunięcie laboratorium
+./demo/lab/lab.sh up       # start the lab and attach the SurfaceX worker to the asi-lab network
+./demo/lab/lab.sh mutate   # changes between scan 1 and scan 2
+./demo/lab/lab.sh down     # remove the lab
 ```
 
-Sieć `asi-lab`, `10.77.0.0/24`. Wymaga działającego stosu SurfaceX i `openssl` (certyfikat testowy w `demo/lab/certs/`, poza Gitem).
+Network `asi-lab`, `10.77.0.0/24`. Needs a running SurfaceX stack and `openssl` (the test certificate goes to `demo/lab/certs/`, untracked).
 
-| Adres | Usługa | Uwagi |
+| Address | Service | Notes |
 |---|---|---|
-| `10.77.0.10` | strona wydziału (CMS) | WordPress, PHP 7.4.33, cookie `PHPSESSID` |
-| `10.77.0.11` | panel administracyjny | przekierowanie do `/admin/` |
-| `10.77.0.12` | środowisko staging | wersja 1 → po `mutate` wersja 2 i port `8443` |
-| `10.77.0.13` | intranet HTTPS | certyfikat TLS, HSTS |
-| `10.77.0.14` | kamera IP | „NetCam-2000” |
-| `10.77.0.15` | serwer pomiarowy | wyłączany przez `mutate` |
-| `10.77.0.16` | nowa aplikacja | uruchamiana przez `mutate` |
+| `10.77.0.10` | faculty website (CMS) | WordPress, PHP 7.4.33, `PHPSESSID` cookie |
+| `10.77.0.11` | admin panel | redirect to `/admin/` |
+| `10.77.0.12` | staging environment | version 1, then version 2 and port `8443` after `mutate` |
+| `10.77.0.13` | HTTPS intranet | TLS certificate, HSTS |
+| `10.77.0.14` | IP camera | "NetCam-2000" |
+| `10.77.0.15` | measurement server | switched off by `mutate` |
+| `10.77.0.16` | new application | started by `mutate` |
 
-Przed skanem dodaj `10.77.0.0/24` do allowlisty i zaimportuj cele z [`lab/targets.csv`](lab/targets.csv) (albo [`lab/targets.json`](lab/targets.json)) — trafią do grupy „Lab demo”.
+Before scanning, add `10.77.0.0/24` to the allowlist and import the targets from [`lab/targets.csv`](lab/targets.csv) (or [`lab/targets.json`](lab/targets.json)); they go to the "Lab demo" group.
 
-## 3. `deploy/demo-lab` — cel ze zmieniającymi się portami
+## 3. `deploy/demo-lab`: target with changing ports
 
-Pojedynczy kontener, który co 90 s przechodzi do kolejnej fazy: otwiera i zamyka porty, zmienia banery, wersje, nagłówki i ciasteczka. Opis faz i sterowanie: [`deploy/demo-lab/README.md`](../deploy/demo-lab/README.md).
-
-## Nagranie i prezentacja
-
-| Plik | Rola |
-|---|---|
-| `record/run.sh` | resetuje dane, nagrywa przejście przez aplikację z napisami i renderuje prezentację (wymaga Node, Playwright i Google Chrome; zmienna `PW_DIR`) |
-| `record/reset.sh` | **usuwa wszystkie dane skanów**, tworzy konta demonstracyjne i uruchamia `demo/lab` od fazy 1 — tylko dla środowiska demonstracyjnego |
-| `record/demo.mjs` | scenariusz nagrania |
-| `pitch/index.html`, `pitch/build.mjs` | slajdy prezentacji i ich eksport do PDF |
-
-Wyniki nagrania trafiają do `demo/out/` (katalog poza Gitem).
-
-## Laboratorium LXC zespołu (Proxmox)
-
-Pliki [`targets.json`](targets.json) i [`allowlist.json`](allowlist.json) opisują trzy kontenery LXC w prywatnej sieci zespołu (`10.99.0.70–72`), używane podczas prac. To środowisko nie jest dostępne poza infrastrukturą zespołu; do samodzielnego odtworzenia pokazu służy `demo/lab`. Dane dostępowe do tych kontenerów nie są przechowywane w repozytorium.
+One container that moves to the next phase every 90 s, opening and closing ports and changing banners, versions, headers and cookies. Phases and controls: [`deploy/demo-lab/README.md`](../deploy/demo-lab/README.md).

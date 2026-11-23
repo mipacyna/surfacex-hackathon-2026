@@ -1,112 +1,91 @@
-# API SurfaceX
+# API
 
-Publiczne API jest dostępne wyłącznie przez gateway (`/api/…`). Workery używają osobnych endpointów `/api/internal/…` z nagłówkiem `X-Worker-Token`.
+The public API is available only through the gateway (`/api/…`). Workers use separate `/api/internal/…` endpoints with an `X-Worker-Token` header.
 
-Uwierzytelnianie sesyjne (cookie + opcjonalny nagłówek `X-Sessionid`). Brak sesji daje `401`, brak uprawnienia `403`. Ochronę CSRF włącza `CSRF_PROTECT=1`; w konfiguracji domyślnej (praca lokalna) jest wyłączona.
+Authentication is session-based (cookie, optional `X-Sessionid` header). No session returns `401`, missing permission returns `403`. CSRF protection is enabled with `CSRF_PROTECT=1` (off by default for local use).
 
-Dane są wspólne dla zespołu: każda zalogowana rola może czytać cele, grupy, skany, wyniki i allowlistę. Kolumna „Role” podaje, kto może wykonać operację.
+Data is shared: any logged-in role can read targets, groups, scans, results and the allowlist. The "Roles" column says who may perform the operation.
 
 ## Auth
 
-| Metoda | Ścieżka | Role | Opis |
+| Method | Path | Roles | Description |
 |---|---|---|---|
-| GET | `/api/auth/csrf/` | public | ustawia cookie CSRF |
-| POST | `/api/auth/login/` | public | logowanie; może wymagać MFA |
-| POST | `/api/auth/mfa/verify/` | public | weryfikacja TOTP |
-| POST | `/api/auth/logout/` | zalogowany | wylogowanie |
-| GET | `/api/auth/me/` | zalogowany | bieżący użytkownik i rola |
-| GET/POST | `/api/auth/users/` | admin | lista / tworzenie użytkowników |
-| PATCH/DELETE | `/api/auth/users/{id}/` | admin | zmiana roli/hasła/statusu |
+| GET | `/api/auth/csrf/` | public | sets the CSRF cookie |
+| POST | `/api/auth/login/` | public | log in; may require MFA |
+| POST | `/api/auth/mfa/verify/` | public | verify a TOTP code |
+| POST | `/api/auth/logout/` | logged in | log out |
+| GET | `/api/auth/me/` | logged in | current user and role |
+| GET/POST | `/api/auth/users/` | admin | list / create users |
+| PATCH/DELETE | `/api/auth/users/{id}/` | admin | change role, password or status |
 
-## Cele i grupy
+## Targets and groups
 
-| Metoda | Ścieżka | Role | Opis |
+| Method | Path | Roles | Description |
 |---|---|---|---|
-| GET/POST | `/api/targets/` | odczyt: wszystkie; zapis: admin/operator | lista (filtry `?search=`, `?group=`, `?limit=1..100`) / dodanie celu |
-| DELETE | `/api/targets/{id}/` | admin/operator | usunięcie (edycja celu nie jest dostępna) |
-| POST | `/api/targets/import/` | admin/operator | import TXT/CSV/JSON (limit 10 000 celów, 5 MiB) |
-| GET/POST | `/api/groups/` | odczyt: wszystkie; zapis: admin/operator | grupy |
-| GET/PATCH/DELETE | `/api/groups/{id}/` | j.w. | szczegóły grupy |
-| POST | `/api/groups/{id}/targets/` | admin/operator | dodaj/usuń cele |
-| POST | `/api/groups/{id}/scan/` | admin/operator | skan całej grupy (`modules`, `client_request_id`, opcjonalnie `window_seconds`) |
-| PUT/DELETE | `/api/groups/{id}/schedule/` | admin/operator | harmonogram |
+| GET/POST | `/api/targets/` | read: all; write: admin/operator | list (filters `?search=`, `?group=`, `?limit=1..100`) / add a target |
+| DELETE | `/api/targets/{id}/` | admin/operator | delete (targets cannot be edited) |
+| POST | `/api/targets/import/` | admin/operator | import TXT/CSV/JSON (10,000 targets, 5 MiB) |
+| GET/POST | `/api/groups/` | read: all; write: admin/operator | groups |
+| GET/PATCH/DELETE | `/api/groups/{id}/` | same | group details |
+| POST | `/api/groups/{id}/targets/` | admin/operator | `{action: "add"\|"remove", target_ids: []}` |
+| POST | `/api/groups/{id}/scan/` | admin/operator | scan the whole group (`modules`, `client_request_id`, optional `window_seconds`) |
+| PUT/DELETE | `/api/groups/{id}/schedule/` | admin/operator | set / remove the schedule |
 
-## Pasywne rozpoznanie
+Every target in responses carries `groups: [{id, name}]`; every scan carries `group_id`, `group_name` and `scheduled`. Deleting a group keeps its hosts and past scans.
 
-| Metoda | Ścieżka | Role | Opis |
+## Passive discovery
+
+| Method | Path | Roles | Description |
 |---|---|---|---|
-| POST | `/api/passive/discover/` | admin/operator | `{"query":"example.com"}` albo IP → poddomeny (crt.sh) + skrót RDAP; cache Redis 15 min; bez auto-skanu |
+| POST | `/api/passive/discover/` | admin/operator | `{"query":"example.com"}` or an IP: subdomains (crt.sh) and an RDAP summary; cached in Redis for 15 min; never starts a scan |
 
-```json
-{
-  "query": "example.com",
-  "type": "domain",
-  "subdomains": ["api.example.com", "example.com", "www.example.com"],
-  "rdap": {
-    "handle": "D1234567-EXAMPLE",
-    "name": "Example Org",
-    "country": "US",
-    "network": "",
-    "asns": [],
-    "nameservers": ["ns1.example.com"]
-  },
-  "sources": { "crt_sh": "ok", "rdap": "ok" },
-  "warnings": [],
-  "cached": false
-}
-```
+Response fields: `query`, `type` (`domain`/`ip`), `subdomains`, `rdap` (or `null`), `sources` (`ok` / `error` / `not_applicable`), `warnings`, `cached`. A failure of one source does not block the other. The endpoint stores nothing; the normal path is the `passive-discovery` scan module ([scanning-policy.md](scanning-policy.md#passive-discovery)).
 
-Pola: `query` (znormalizowane), `type` (`domain`/`ip`), `subdomains` (puste dla IP), `rdap` (lub `null`), `sources` (`ok` / `error` / `not_applicable`), `warnings`, `cached`. Częściowa awaria źródła nie blokuje drugiej. Endpoint niczego nie zapisuje (UI go nie eksponuje — główna ścieżka to moduł skanu `passive-discovery`). Szczegóły: `docs/passive-discovery.md`.
+## Scans and results
 
-## Skany i wyniki
-
-| Metoda | Ścieżka | Role | Opis |
+| Method | Path | Roles | Description |
 |---|---|---|---|
-| GET/POST | `/api/scans/` | odczyt: wszystkie; start: admin/operator | lista / start (`target_ids`, `modules`, opcjonalnie `window_seconds`) |
-| GET | `/api/scans/{id}/` | wszystkie | szczegóły, eventy, batche, ETA |
-| POST | `/api/scans/{id}/cancel/` | admin/operator | anulowanie |
-| POST | `/api/scans/{id}/resume/` | admin/operator | wznowienie batchy `PAUSED`; opcjonalne `window_seconds` |
-| GET | `/api/scans/{id}/observations/` | wszystkie | obserwacje z korektami; filtry `?lifecycle=`, `?entity_type=`; do 2000 pozycji |
-| GET | `/api/scans/{id}/diff/` | wszystkie | porównanie z poprzednim ukończonym przebiegiem o tych samych modułach i tej samej grupie lub liście celów; `?against=<id>` wskazuje inny przebieg |
-| GET | `/api/scans/{id}/export/?format=csv\|json` | admin/operator/analyst | eksport zakończonego przebiegu |
-| POST | `/api/scans/{id}/export/defectdojo/` | admin/operator/analyst | ręczny eksport do DefectDojo |
-| POST | `/api/observations/import/` | admin/operator/analyst | import wyników JSON (`surfacex.export.v1`) |
+| GET/POST | `/api/scans/` | read: all; start: admin/operator | list / start (`target_ids`, `modules`, optional `window_seconds`) |
+| GET | `/api/scans/{id}/` | all | details, events, batches, ETA |
+| POST | `/api/scans/{id}/cancel/` | admin/operator | cancel |
+| POST | `/api/scans/{id}/resume/` | admin/operator | resume `PAUSED` batches; optional `window_seconds` |
+| GET | `/api/scans/{id}/observations/` | all | observations with overrides; filters `?lifecycle=`, `?entity_type=`; up to 2000 items |
+| GET | `/api/scans/{id}/diff/` | all | compare with the previous completed run with the same modules and group or target list; `?against=<id>` picks another run |
+| GET | `/api/scans/{id}/export/?format=csv\|json` | admin/operator/analyst | export a finished run |
+| POST | `/api/scans/{id}/export/defectdojo/` | admin/operator/analyst | manual DefectDojo export |
+| POST | `/api/observations/import/` | admin/operator/analyst | import JSON results (`surfacex.export.v1`) |
 
-Deadline skanu jest obowiązkowy nawet wtedy, gdy klient nie wysyła `window_seconds`: API stosuje wtedy globalne 3600 s. Role inne niż `admin` mogą podać maksymalnie 3600 s; `admin` maksymalnie 86 400 s. UI oferuje administratorowi 30 min / 1 h / 2 h, a pozostałym rolom stosuje stałe 1 h bez selektora.
+A scan deadline is always enforced. Without `window_seconds` the API applies 3600 s. Roles other than `admin` may request at most 3600 s; `admin` at most 86,400 s.
 
-## Allowlista, overrides, audit
+## Allowlist, overrides, audit
 
-| Metoda | Ścieżka | Role | Opis |
+| Method | Path | Roles | Description |
 |---|---|---|---|
-| GET/POST | `/api/allowlist/` | odczyt: wszystkie; zapis: admin/operator | lista / dodanie wpisu |
-| PATCH/DELETE | `/api/allowlist/{id}/` | admin/operator | edycja (w tym pole `enabled`) / usunięcie |
-| POST | `/api/overrides/` | admin/operator/analyst | upsert manual override |
-| DELETE | `/api/overrides/{id}/` | admin/operator/analyst | usunięcie |
-| GET | `/api/audit/` | admin | 200 ostatnich wpisów audytu |
-
-W interfejsie formularz allowlisty jest dostępny dla roli `admin`; `operator` może zarządzać allowlistą przez API.
+| GET/POST | `/api/allowlist/` | read: all; write: admin/operator | list / add an entry |
+| PATCH/DELETE | `/api/allowlist/{id}/` | admin/operator | edit (including `enabled`) / delete |
+| POST | `/api/overrides/` | admin/operator/analyst | upsert a manual override |
+| DELETE | `/api/overrides/{id}/` | admin/operator/analyst | delete an override |
+| GET | `/api/audit/` | admin | last 200 audit entries |
 
 ## Internal (worker)
 
-Wymagany nagłówek `X-Worker-Token`. Bez sesji użytkownika.
+Requires `X-Worker-Token`; no user session. The gateway returns `404` for `/api/internal/`, so these are reachable only from the `backend` network.
 
-| Metoda | Ścieżka | Opis |
+| Method | Path | Description |
 |---|---|---|
-| POST | `/api/internal/batches/reconcile/` | republish stale + pause po deadline |
-| POST | `/api/internal/schedules/dispatch/` | uruchom due schedules |
-| POST | `/api/internal/batches/{id}/claim/` | claim batch |
-| POST | `/api/internal/batches/{id}/progress/` | postęp; może zwrócić `cancel_requested` po deadline |
-| GET | `/api/internal/batches/{id}/cancel-check/` | poll cancel **oraz** pause okna |
-| POST | `/api/internal/batches/{id}/complete/` | wynik; **409** gdy batch już `PAUSED` |
-| POST | `/api/internal/batches/{id}/fail/` | błąd/cancel; `PAUSED` pozostaje `PAUSED` |
+| POST | `/api/internal/batches/reconcile/` | republish stale batches, pause after deadline |
+| POST | `/api/internal/schedules/dispatch/` | start due schedules |
+| POST | `/api/internal/batches/{id}/claim/` | claim a batch |
+| POST | `/api/internal/batches/{id}/progress/` | progress; may return `cancel_requested` after the deadline |
+| GET | `/api/internal/batches/{id}/cancel-check/` | poll for cancel and window pause |
+| POST | `/api/internal/batches/{id}/complete/` | submit result; **409** if the batch is already `PAUSED` |
+| POST | `/api/internal/batches/{id}/fail/` | report failure or cancel; `PAUSED` stays `PAUSED` |
 
 ## Health
 
-| Metoda | Ścieżka | Opis |
+| Method | Path | Description |
 |---|---|---|
-| GET | `/api/health/` | liveness API i stan bazy (bez logowania) |
-| GET | `/api/system/` | wersje komponentów i stan integracji DefectDojo (zalogowany) |
+| GET | `/api/health/` | API liveness and database state (no login) |
+| GET | `/api/system/` | component versions and DefectDojo status (logged in) |
 
-Gateway zwraca `404` dla `/api/internal/` — te endpointy są osiągalne tylko z sieci `backend`.
-
-Szczegóły schematów plików: `docs/import-export.md`. Pasywne rozpoznanie: `docs/passive-discovery.md`. Macierz ról: `docs/rbac.md`.
+File formats: [import-export.md](import-export.md). Role matrix: [security.md](security.md#roles).

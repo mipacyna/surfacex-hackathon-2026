@@ -1,19 +1,10 @@
-# Format sygnatur
+# Signature format
 
-## Zasady
+Signatures are declarative YAML. They must not contain executable code, Ruby/Python scripts or external calls.
 
-Sygnatury są deklaratywne. Nie wolno umieszczać w nich kodu wykonywalnego, skryptów Ruby/Python ani wywołań zewnętrznych.
+Allowed checks: HTTP header, cookie name, HTML fragment, favicon hash, status of an allowed relative path, bounded version regex.
 
-Dozwolone kontrole:
-
-- nagłówek HTTP;
-- nazwa cookie;
-- fragment HTML;
-- favicon hash;
-- status dozwolonej ścieżki względnej;
-- ograniczony regex wersji.
-
-## Schemat YAML
+## Schema
 
 ```yaml
 apiVersion: surfacex/v1
@@ -50,42 +41,34 @@ spec:
     high: [70, 100]
 ```
 
-## Typy reguł
+## Rule types
 
-| Typ | Pola | Opis |
+| Type | Fields | Description |
 |---|---|---|
-| `header` | `name`, `equals` / `contains` / `regex` (bez nich: sama obecność) | nagłówek odpowiedzi |
-| `cookie` | `name` | wyłącznie nazwa cookie, bez wartości |
-| `html` | `contains` / `regex` | fragment treści strony |
-| `favicon` | `hash` | hash favicony (mmh3) zwracany przez httpx |
-| `path` | `path`, `status` | badany adres zawiera podaną ścieżkę i (opcjonalnie) ma jeden z podanych kodów |
-| `status` | `status` | kod odpowiedzi HTTP |
-| `versionRegex` | `source` (`html` albo nazwa nagłówka), `pattern` | wyciągnięcie wersji; pierwsza grupa wzorca trafia do pola `version` |
+| `header` | `name`, `equals` / `contains` / `regex` (none: presence only) | response header |
+| `cookie` | `name` | cookie name only, never the value |
+| `html` | `contains` / `regex` | fragment of the page body |
+| `favicon` | `hash` | favicon hash (mmh3) reported by httpx |
+| `path` | `path`, `status` | the probed URL contains the path and (optionally) has one of the status codes |
+| `status` | `status` | HTTP status code |
+| `versionRegex` | `source` (`html` or a header name), `pattern` | extracts a version; the first capture group becomes `version` |
 
-Każda reguła może mieć `weight` (domyślnie 10). Porównania tekstu nie rozróżniają wielkości liter.
+Each rule may have a `weight` (default 10). Text comparisons are case-insensitive.
 
-## Ograniczenia bezpieczeństwa
+## Safety limits
 
-- `path` musi być względna i zaczynać się od `/`; schematy `http://`, `https://` oraz hosty w ścieżce są odrzucane;
-- wzorzec regex może mieć najwyżej 200 znaków i jest stosowany do pierwszych 32 KiB wejścia; błędny wzorzec jest pomijany;
-- treść strony do analizy to najwyżej 64 KiB;
-- wartości cookies nie są porównywane ani zapisywane;
-- sygnatura nie wykonuje żadnych dodatkowych żądań — działa wyłącznie na odpowiedziach już zebranych przez httpx;
-- `matchAny: false` sumuje wagi wszystkich trafionych reguł; `true` kończy na pierwszej trafionej regule.
+- `path` must be relative and start with `/`; `http://`, `https://` and hosts in the path are rejected.
+- A regex may have at most 200 characters and is applied to the first 32 KiB of input; an invalid pattern is skipped.
+- At most 64 KiB of page body is analyzed.
+- Cookie values are never compared or stored.
+- A signature makes no extra requests. It only works on responses httpx already collected.
+- `matchAny: false` sums the weights of all matching rules; `true` stops at the first match.
 
 ## Confidence score
 
-Domyślne wagi:
+Default weights: distinctive header `30`, cookie name `20`, favicon hash `40`, HTML fragment `20`, unambiguous banner or footer `30`. Agreeing signals add up to a maximum of `100`. A single weak signal cannot reach `high`.
 
-- charakterystyczny nagłówek: `30`;
-- nazwa cookie: `20`;
-- favicon hash: `40`;
-- fragment HTML: `20`;
-- jednoznaczny banner lub stopka: `30`.
-
-Zgodne sygnały sumują się do maksymalnie `100`. Pojedynczy słaby sygnał nie może dać poziomu `high`.
-
-## Przykład minimalny
+## Minimal example
 
 ```yaml
 apiVersion: surfacex/v1
@@ -104,24 +87,22 @@ spec:
       weight: 40
 ```
 
-## Dodanie własnej sygnatury
+## Adding a signature
 
-1. Zapisz plik `signatures/<nazwa>.yaml` (jeden dokument `kind: Signature` na plik).
-2. Przebuduj i uruchom ponownie obrazy, które zawierają katalog sygnatur:
+1. Save `signatures/<name>.yaml` (one `kind: Signature` document per file).
+2. Rebuild the images that include the signatures directory:
 
    ```bash
    docker compose up --build -d api worker
    ```
 
-3. Uruchom skan z modułem `signatures` albo `full-pipeline`.
-4. Sprawdź wynik w **Findings**: obserwacje typu `signature` z polami `signature_id`, `technology`, `confidence`, `level`, `version` i `evidence` (lista trafionych reguł).
+3. Run a scan with the `signatures` or `full-pipeline` module.
+4. Check **Findings** for `signature` observations with `signature_id`, `technology`, `confidence`, `level`, `version` and `evidence` (the matched rules).
 
-Sygnatury są wczytywane przy starcie procesu workera, dlatego zmiana pliku wymaga przebudowania obrazu. Plik z błędem składni YAML albo bez `kind: Signature` jest pomijany.
+Signatures load when the worker process starts, so a change needs an image rebuild. A file with invalid YAML or without `kind: Signature` is skipped. Built in: `wordpress-core`, `nginx-server`, `apache-httpd`.
 
-Wbudowany zestaw: `wordpress-core`, `nginx-server`, `apache-httpd`.
+## Known limitations
 
-## Ograniczenia prototypu
-
-- Sygnatury są plikami w repozytorium; nie ma edytora w UI ani wersjonowania w bazie.
-- httpx odpytuje adres główny każdego endpointu (`scheme://host:port`), więc reguła `path` trafia tylko wtedy, gdy ścieżka jest częścią badanego adresu. Filtr `pathsExtra` modułu `signatures` jest walidowany, ale nie powoduje jeszcze dodatkowych żądań.
-- Filtry `pack` i `minConfidence` modułu `signatures` nie zawężają jeszcze zestawu — dopasowywane są wszystkie wczytane sygnatury.
+- Signatures are repository files; there is no UI editor or database versioning.
+- httpx probes the root of each endpoint (`scheme://host:port`), so a `path` rule matches only if the path is part of the probed URL. The `pathsExtra` filter of the `signatures` module is validated but does not yet cause extra requests.
+- The `pack` and `minConfidence` filters of the `signatures` module do not narrow the set yet; all loaded signatures are matched.

@@ -10,7 +10,6 @@ description: Creates and maintains accurate architecture, operations, security, 
 Before writing, inspect the implementation and the relevant existing documents:
 
 - `README.md`;
-- `docs/mvp-plan.md`;
 - `docs/architecture.md`;
 - Compose files and Dockerfiles;
 - scripts referenced by the document.
@@ -19,7 +18,7 @@ Implementation wins over stale prose. If code and documentation conflict, report
 
 ## Language and style
 
-- Write project-facing documentation in Polish unless the user requests another language.
+- Write project-facing documentation in English unless the user requests another language.
 - Keep identifiers, commands, paths and protocol names in their original technical form.
 - Lead with purpose and outcome.
 - Prefer short sections, lists and executable examples.
@@ -38,13 +37,8 @@ Maintain these documents as the project grows:
 - `docs/scanning-policy.md`: authorization, allowlists, limits and safe scanning;
 - `docs/signatures.md`: signature schema, examples and safety constraints;
 - `docs/import-export.md`: versioned CSV/JSON formats;
-- `docs/rbac.md`: role and permission matrix;
-- `docs/encryption.md`: encrypted fields, keys, rotation and failure modes;
-- `docs/security.md`: threat model and residual risks;
-- `docs/operations.md`: healthchecks, logs, scaling and troubleshooting;
-- `docs/backup-restore.md`: encrypted backup and restore test;
-- `docs/local-platforms.md`: Linux/macOS/Windows and amd64/arm64 behavior;
-- `docs/demo-script.md`: repeatable two-scan demonstration.
+- `docs/security.md`: roles, authentication, encryption, threat model and residual risks;
+- `docs/operations.md`: healthchecks, logs, scaling, backup and restore, supported platforms, troubleshooting.
 
 Create a document only when it has real content. Do not add empty placeholder pages.
 

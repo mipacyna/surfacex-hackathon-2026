@@ -17,7 +17,7 @@ SurfaceX (`web/`) is a local-first attack surface console:
 
 This is an operations UI, not a marketing landing page. Do not force full-bleed heroes or brand-over-content layouts onto authenticated app screens.
 
-Read `docs/mvp-plan.md`, `docs/rbac.md`, and `docs/demo-script.md` before inventing IA.
+Read `docs/security.md` before inventing IA.
 
 ## Composition rules
 

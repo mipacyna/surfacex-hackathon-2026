@@ -3,7 +3,7 @@
     {
       "value": "10.77.0.10",
       "type": "ip",
-      "comment": "Strona wydziału (CMS)",
+      "comment": "Faculty website (CMS)",
       "groups": [
         "Lab demo"
       ]
@@ -11,7 +11,7 @@
     {
       "value": "10.77.0.11",
       "type": "ip",
-      "comment": "Panel administracyjny",
+      "comment": "Admin panel",
       "groups": [
         "Lab demo"
       ]
@@ -19,7 +19,7 @@
     {
       "value": "10.77.0.12",
       "type": "ip",
-      "comment": "Środowisko staging",
+      "comment": "Staging environment",
       "groups": [
         "Lab demo"
       ]
@@ -35,7 +35,7 @@
     {
       "value": "10.77.0.14",
       "type": "ip",
-      "comment": "Kamera IP w laboratorium",
+      "comment": "IP camera in the lab",
       "groups": [
         "Lab demo"
       ]
@@ -43,7 +43,7 @@
     {
       "value": "10.77.0.15",
       "type": "ip",
-      "comment": "Serwer pomiarowy (niestabilny)",
+      "comment": "Measurement server (unstable)",
       "groups": [
         "Lab demo"
       ]
@@ -51,7 +51,7 @@
     {
       "value": "10.77.0.16",
       "type": "ip",
-      "comment": "Rezerwacja adresu",
+      "comment": "Reserved address",
       "groups": [
         "Lab demo"
       ]

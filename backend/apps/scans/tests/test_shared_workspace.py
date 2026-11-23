@@ -33,11 +33,11 @@ class SharedWorkspaceTests(TestCase):
         self.assertEqual(response.status_code, 201)
 
     def test_everyone_sees_the_same_allowlist(self):
-        AllowlistEntry.objects.create(owner=self.admin, value="lab.agh.test", entry_type="domain")
+        AllowlistEntry.objects.create(owner=self.admin, value="lab.example.test", entry_type="domain")
         self.client.force_login(self.analyst)
         body = self.client.get(reverse("allowlist-list")).json()
         self.assertTrue(body["enforced"])
-        self.assertEqual([item["value"] for item in body["results"]], ["lab.agh.test"])
+        self.assertEqual([item["value"] for item in body["results"]], ["lab.example.test"])
 
     def test_duplicate_target_across_users_rejected(self):
         Target.objects.create(owner=self.admin, address="10.0.0.5", target_type="ip")

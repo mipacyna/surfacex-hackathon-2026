@@ -1,79 +1,73 @@
-# Import i eksport
+# Import and export
 
-## Import celów
+## Target import
 
 ```http
 POST /api/targets/import/
 Content-Type: multipart/form-data
 ```
 
-Role: `admin`, `operator`. W UI: zakładka **Targets** → **Import hosts**.
+Roles: `admin`, `operator`. UI: **Targets** → **Import hosts**.
 
-| Pole | Opis |
+| Field | Description |
 |---|---|
-| `file` | plik TXT, CSV albo JSON (rozpoznawany po rozszerzeniu lub zawartości) |
-| `start_scan` | domyślnie `true` — po imporcie kolejkuje skan zaimportowanych celów |
-| `modules` | opcjonalny JSON z modułami skanu; domyślnie `full-pipeline` |
-| `group_id` | ID istniejącej grupy, do której trafią wszystkie cele z pliku |
-| `group_name` | alternatywnie nazwa grupy; tworzona, jeśli nie istnieje (bez rozróżniania wielkości liter) |
+| `file` | TXT, CSV or JSON file (detected by extension or content) |
+| `start_scan` | default `true`: queue a scan of the imported targets |
+| `modules` | optional JSON with scan modules; default `full-pipeline` |
+| `group_id` | ID of an existing group that receives all targets in the file |
+| `group_name` | alternatively, a group name; created if missing (case-insensitive) |
 
-Limity: **10 000 celów** i **5 MiB** na plik; zakres CIDR do 4096 adresów.
+Limits: **10,000 targets** and **5 MiB** per file; CIDR ranges up to 4096 addresses.
 
-### TXT
+**TXT:** one address per line (IP, CIDR or domain). The type is detected automatically.
 
-Jeden adres w linii (IP, CIDR albo domena). Typ celu jest rozpoznawany automatycznie.
-
-### CSV
-
-Wymagana kolumna z adresem: `value` (albo `address`, `host`, `target`, `ip`). Kolumny opcjonalne: `type` (`ip` / `cidr` / `domain`), `comment` (albo `notes`), `group` (albo `groups`, `group_name`). Pozostałe kolumny są ignorowane.
+**CSV:** an address column is required: `value` (or `address`, `host`, `target`, `ip`). Optional: `type` (`ip` / `cidr` / `domain`), `comment` (or `notes`), `group` (or `groups`, `group_name`). Other columns are ignored.
 
 ```csv
 value,type,comment,group
-10.77.0.10,ip,Strona wydziału (CMS),Lab demo
-10.77.0.0/24,cidr,Podsieć laboratorium,Lab demo;DMZ
+10.77.0.10,ip,Faculty website (CMS),Lab demo
+10.77.0.0/24,cidr,Lab subnet,Lab demo;DMZ
 app.example.lab,domain,Portal,Web
 ```
 
-### JSON
+**JSON:**
 
 ```json
 {
   "schema_version": 1,
   "targets": [
-    { "value": "10.0.0.0/24", "type": "cidr", "comment": "sieć testowa", "groups": ["lab", "dmz"] },
+    { "value": "10.0.0.0/24", "type": "cidr", "comment": "test network", "groups": ["lab", "dmz"] },
     { "value": "app.example.lab", "type": "domain", "comment": "portal" },
     { "value": "10.0.0.15" }
   ]
 }
 ```
 
-Element listy może być też samym napisem z adresem. `schema_version` inne niż `1` powoduje odrzucenie pliku.
+A list item can also be a plain address string. A `schema_version` other than `1` rejects the file.
 
-### Grupy
+**Groups** can be set per row (`group` column in CSV, `group` / `groups` in JSON). Separate several with `;` or `|` (a list in JSON). Missing groups are created. The group from the form and the groups from rows are combined.
 
-Grupy można podać per wiersz (kolumna `group` w CSV, pole `group` / `groups` w JSON). Kilka grup rozdziela się `;` lub `|` (w JSON także listą). Brakujące grupy są tworzone. Grupa z formularza i grupy z wierszy sumują się.
+**Validation:**
 
-### Walidacja
+- every address goes through the same normalization as a manually added target (IPv4/IPv6, canonical CIDR, IDN domains);
+- invalid rows are skipped and returned in `parse_errors` (up to 50 messages);
+- duplicates in the file count in `skipped_duplicates_in_file`, targets that already exist in `existing_count`;
+- targets outside the allowlist are rejected.
 
-- każdy adres przechodzi tę samą normalizację co cel dodany ręcznie (IPv4/IPv6, kanoniczny CIDR, domena z obsługą IDN);
-- niepoprawne wiersze są pomijane i zwracane w `parse_errors` (do 50 komunikatów);
-- duplikaty w pliku są liczone w `skipped_duplicates_in_file`, a cele już istniejące w `existing_count`;
-- cele spoza allowlisty są odrzucane.
+The response contains `created_count`, `existing_count`, `total_count`, `target_ids`, `groups[]` (`{id, name, created, added_count}`) and `scan` with the created run, if a scan was started.
 
-Odpowiedź zawiera `created_count`, `existing_count`, `total_count`, `target_ids`, `groups[]` (`{id, name, created, added_count}`) oraz `scan` z utworzonym przebiegiem, jeśli skan został uruchomiony.
-
-## Eksport wyników
+## Result export
 
 ```http
 GET /api/scans/<id>/export/?format=json
 GET /api/scans/<id>/export/?format=csv
 ```
 
-Role: `admin`, `operator`, `analyst`. Eksportować można tylko zakończony przebieg (inaczej HTTP 409). Każdy eksport jest zapisywany w audycie (`scan.export`).
+Roles: `admin`, `operator`, `analyst`. Only finished runs can be exported (otherwise HTTP 409). Every export is recorded in the audit log (`scan.export`).
 
-### JSON — `surfacex.export.v1`
+### JSON: `surfacex.export.v1`
 
-Schemat: [`schemas/surfacex.export.v1.json`](../schemas/surfacex.export.v1.json).
+Schema: [`schemas/surfacex.export.v1.json`](../schemas/surfacex.export.v1.json).
 
 ```json
 {
@@ -104,50 +98,46 @@ Schemat: [`schemas/surfacex.export.v1.json`](../schemas/surfacex.export.v1.json)
 
 ### CSV
 
-Jeden wiersz na obserwację:
+One row per observation; `attrs_json` holds the attributes as JSON.
 
 ```csv
 entity_type,entity_key,lifecycle,target_address,source,miss_streak,attrs_json
 port,port:10.77.0.11:tcp/80,CHANGED,10.77.0.11,scanner,0,"{""address"":""10.77.0.11"",""port"":80,""service"":""http""}"
 ```
 
-Kolumna `attrs_json` zawiera atrybuty obserwacji jako JSON.
-
-## Import wyników
+## Result import
 
 ```http
 POST /api/observations/import/
 Content-Type: application/json
 ```
 
-Role: `admin`, `operator`, `analyst`. Przyjmowany jest JSON w formacie eksportu `surfacex.export.v1` (inna wartość pola `schema` jest odrzucana).
+Roles: `admin`, `operator`, `analyst`. Accepts JSON in the `surfacex.export.v1` format; any other `schema` value is rejected. Only JSON can be imported; CSV is export-only.
 
-- Bez `run.id` powstaje nowy, ukończony przebieg oznaczony jako import.
-- Z `run.id` obserwacje są dopisywane do istniejącego przebiegu (aktualizacja po `entity_key`).
-- Obserwacje trafiają do tych samych tabel co wyniki skanera, ze źródłem `import`, i są widoczne w **Findings**, eksporcie i porównaniach.
-- Import nie modyfikuje ręcznych korekt (`ManualOverride`).
-- Operacja jest zapisywana w audycie (`observations.import`).
+- Without `run.id`, a new completed run marked as imported is created.
+- With `run.id`, observations are added to that run (updated by `entity_key`).
+- Observations go to the same tables as scanner results with `source = import`, and appear in Findings, export and diffs.
+- Import never changes manual overrides.
+- The operation is audited as `observations.import`.
 
-Odpowiedź: `{ "run_id": 13, "created": 42, "total": 42 }`.
-
-Wyniki importuje się wyłącznie w formacie JSON; CSV służy do eksportu.
+Response: `{ "run_id": 13, "created": 42, "total": 42 }`.
 
 ## DefectDojo
 
-Po zakończeniu skanu z co najmniej jednym ukończonym batchem SurfaceX wysyła raport automatycznie. Ręczny fallback:
+When a scan with at least one completed batch finishes, SurfaceX sends a report automatically. Manual fallback:
 
 ```http
 POST /api/scans/<id>/export/defectdojo/
 ```
 
-Eksporter tworzy raport `Generic Findings Import` i przesyła go przez `POST /api/v2/reimport-scan/`. Jako findings trafiają:
+The exporter builds a `Generic Findings Import` report and uploads it through `POST /api/v2/reimport-scan/`. Findings include:
 
-- aktywne hosty (poziom `Info`);
-- otwarte porty i usługi wraz z produktem i wersją (poziom wg oceny ciekawości portu: `High`, `Medium`, `Low` albo `Info`);
-- technologie wykryte przez httpx i sygnatury SurfaceX.
+- live hosts (severity `Info`);
+- open ports and services with product and version (severity from the port's curiosity rating: `High`, `Medium`, `Low` or `Info`);
+- technologies found by httpx and SurfaceX signatures.
 
-`unique_id_from_tool` jest stabilnym skrótem typu obserwacji, hosta, portu, protokołu, endpointu i technologii. Nie zawiera identyfikatora przebiegu, dzięki czemu ponowny eksport aktualizuje istniejące findings. Eksport ustawia `close_old_findings=false`, ponieważ pojedynczy przebieg może obejmować tylko część zapisanych celów.
+`unique_id_from_tool` is a stable hash of observation type, host, port, protocol, endpoint and technology. It does not include the run ID, so re-exporting updates existing findings. The export sets `close_old_findings=false` because one run may cover only part of the saved targets.
 
-Status wysyłki (`pending`, `sending`, `sent`, `failed`, `skipped`) jest zapisany przy przebiegu i widoczny na liście skanów. Wyniki modułu pasywnego nie są wysyłane; skan wyłącznie pasywny kończy eksport jako `skipped`.
+The export status (`pending`, `sending`, `sent`, `failed`, `skipped`) is stored on the run and shown in the scan list. Passive results are not sent.
 
-Lokalny stos uruchamia się profilem `defectdojo`. Dla zewnętrznej instancji ustaw `DEFECTDOJO_URL` oraz `DEFECTDOJO_API_TOKEN`. Nazwy Product Type, Product, Engagement i Test konfiguruje się zmiennymi `DEFECTDOJO_*` z `.env.example`.
+The local stack starts with the `defectdojo` profile. For an external instance set `DEFECTDOJO_URL` and `DEFECTDOJO_API_TOKEN`. Product Type, Product, Engagement and Test names are set with the `DEFECTDOJO_*` variables in `.env.example`.

@@ -1,91 +1,86 @@
-# Model danych
+# Data model
 
-Dane trwałe przechowuje PostgreSQL. Modele znajdują się w `backend/apps/scans/models.py` i `backend/apps/accounts/models.py`; tabele mają prefiksy `scans_` i `accounts_`.
+PostgreSQL stores all persistent data. Models live in `backend/apps/scans/models.py` and `backend/apps/accounts/models.py`; tables are prefixed `scans_` and `accounts_`.
 
-## Encje
+## Entities
 
-| Model | Opis | Najważniejsze pola |
+| Model | Description | Key fields |
 |---|---|---|
-| `Target` | zapisany cel skanu | `address`, `target_type` (`ip` / `cidr` / `domain`), `comment` |
-| `TargetGroup` | nazwana grupa celów; cel może należeć do wielu grup | `name`, `description`, `targets` |
-| `GroupSchedule` | harmonogram skanu grupy (najwyżej jeden na grupę) | `frequency`, `interval_hours`, `time_of_day`, `weekday`, `modules_snapshot`, `next_run_at`, `last_status` |
-| `AllowlistEntry` | zatwierdzony zakres skanowania | `value`, `entry_type`, `enabled`, `comment` |
-| `ScanRun` | jeden przebieg skanu | `status`, `modules_snapshot`, `window_seconds`, `deadline_at`, `progress`, `eta_seconds`, `resume_available`, `result_summary`, `defectdojo_export_status`, `started_at`, `finished_at` |
-| `ScanBatch` | porcja pracy: jeden cel w przebiegu | `target_address`, `target_type`, `delivery_id`, `status`, `progress`, `result`, `error` |
-| `ScanEvent` | wpis konsoli aktywności | `level`, `source`, `message` |
-| `Observation` | znormalizowany wynik | `entity_type`, `entity_key`, `lifecycle`, `attrs`, `source`, `miss_streak` |
-| `FingerprintEvidence` | dowód obserwacji | `kind`, `summary`, `ciphertext` (AES-256-GCM) |
-| `ManualOverride` | trwała korekta użytkownika | `entity_key`, `tags`, `notes_ciphertext`, `attrs_patch`, `updated_by` |
-| `AuditLog` | dziennik audytu | `actor`, `action`, `object_type`, `object_id`, `summary` |
-| `QueueState` | epoka brokera do wykrycia utraty kolejki Redis | `broker_epoch` |
-| `UserProfile` | rola i MFA użytkownika (rozszerza `auth.User`) | `role`, `mfa_enabled`, `mfa_secret` |
+| `Target` | saved scan target | `address`, `target_type` (`ip` / `cidr` / `domain`), `comment` |
+| `TargetGroup` | named group of targets; a target can be in several groups | `name`, `description`, `targets` |
+| `GroupSchedule` | scan schedule of a group (at most one per group) | `frequency`, `interval_hours`, `time_of_day`, `weekday`, `modules_snapshot`, `next_run_at`, `last_status` |
+| `AllowlistEntry` | approved scan scope | `value`, `entry_type`, `enabled`, `comment` |
+| `ScanRun` | one scan run | `status`, `modules_snapshot`, `window_seconds`, `deadline_at`, `progress`, `eta_seconds`, `resume_available`, `result_summary`, `defectdojo_export_status` |
+| `ScanBatch` | unit of work: one target in a run | `target_address`, `target_type`, `delivery_id`, `status`, `progress`, `result`, `error` |
+| `ScanEvent` | activity console entry | `level`, `source`, `message` |
+| `Observation` | normalized result | `entity_type`, `entity_key`, `lifecycle`, `attrs`, `source`, `miss_streak` |
+| `FingerprintEvidence` | evidence for an observation | `kind`, `summary`, `ciphertext` (AES-256-GCM) |
+| `ManualOverride` | persistent user correction | `entity_key`, `tags`, `notes_ciphertext`, `attrs_patch`, `updated_by` |
+| `AuditLog` | audit trail | `actor`, `action`, `object_type`, `object_id`, `summary` |
+| `QueueState` | broker epoch, used to detect Redis data loss | `broker_epoch` |
+| `UserProfile` | role and MFA settings (extends `auth.User`) | `role`, `mfa_enabled`, `mfa_secret` |
 
-Sygnatury nie są przechowywane w bazie — to pliki YAML w katalogu `signatures/` ([signatures.md](signatures.md)).
+Signatures are not stored in the database. They are YAML files in `signatures/` ([signatures.md](signatures.md)).
 
-Dane są wspólne dla zespołu: pole `owner` wskazuje autora rekordu, ale wszystkie role widzą te same cele, grupy, skany i wyniki.
+Data is shared across users: `owner` records the author, but every role sees the same targets, groups, scans and results.
 
-## Stany przebiegu i batcha
+## Run and batch states
 
-`ScanRun.status`: `queued` → `running` → `completed` | `partial` | `failed` | `cancelled`; `cancel_requested` oznacza anulowanie w toku.
+`ScanRun.status`: `queued` → `running` → `completed` | `partial` | `failed` | `cancelled`. `cancel_requested` marks a cancellation in progress.
 
-`ScanBatch.status`: `queued`, `running`, `completed`, `failed`, `cancelled`, `paused`. Stan `paused` nadaje koniec okna czasowego; przebieg z wstrzymanymi batchami ma status `partial` i `resume_available = true`.
+`ScanBatch.status`: `queued`, `running`, `completed`, `failed`, `cancelled`, `paused`. The end of the time window sets `paused`. A run with paused batches is `partial` with `resume_available = true`.
 
-`modules_snapshot` zapisuje konfigurację modułów z chwili startu — zmiana ustawień w trakcie skanu obowiązuje od następnego przebiegu. Użyty tryb nmap (`syn` / `connect`) oraz pełne linie poleceń nmap i httpx są zapisane w `ScanBatch.result.metadata`.
+`modules_snapshot` stores the module configuration at start, so changes mid-scan apply from the next run. The nmap mode (`syn` / `connect`) and the full nmap and httpx command lines are stored in `ScanBatch.result.metadata`.
 
-## Obserwacje
+## Observations
 
-Każda obserwacja należy do jednego przebiegu i ma klucz logiczny, stabilny między przebiegami:
+Each observation belongs to one run and has a logical key that is stable across runs:
 
-| `entity_type` | `entity_key` | Przykładowe atrybuty (`attrs`) |
+| `entity_type` | `entity_key` | Example `attrs` |
 |---|---|---|
-| `host` | `host:<adres>` | `address`, `status` |
-| `port` | `port:<adres>:<protokół>/<port>` | `service`, `product`, `version`, `state`, `curiosity` |
+| `host` | `host:<address>` | `address`, `status` |
+| `port` | `port:<address>:<protocol>/<port>` | `service`, `product`, `version`, `state`, `curiosity` |
 | `http` | `http:<url>` | `status_code`, `title`, `server`, `interesting_headers`, `security_headers_missing`, `cookies`, `cookie_tech` |
-| `tech` | `tech:<url>:<technologia>` | `technology`, `confidence` |
-| `cert` | `cert:<url>:<podmiot>` | podmiot, wystawca, data ważności |
-| `signature` | `signature:<endpoint>:<technologia>` | `signature_id`, `confidence`, `level`, `version`, `evidence` |
-| `host` (pasywna) | `passive:<zapytanie>` | dane RDAP i nazwy z Certificate Transparency |
+| `tech` | `tech:<url>:<technology>` | `technology`, `confidence` |
+| `cert` | `cert:<url>:<subject>` | subject, issuer, validity |
+| `signature` | `signature:<endpoint>:<technology>` | `signature_id`, `confidence`, `level`, `version`, `evidence` |
+| `host` (passive) | `passive:<query>` | RDAP data and Certificate Transparency names |
 
-Para (`run`, `entity_key`) jest unikalna.
+The pair (`run`, `entity_key`) is unique. `source` is `scanner` (worker result) or `import` (loaded from a JSON file).
 
-| `source` | Znaczenie |
-|---|---|
-| `scanner` | wynik workera |
-| `import` | wynik wczytany z pliku JSON |
+## Immutable observations, persistent overrides
 
-## Niemutowalne obserwacje i trwałe korekty
-
-Wynik skanera lub importu nie jest modyfikowany przez użytkownika. Korekta trafia do `ManualOverride`, przypiętego do `entity_key`:
+Users never edit scanner or imported results. A correction goes into a `ManualOverride` pinned to `entity_key`:
 
 ```text
-widok w UI = obserwacja ⊕ aktywna korekta (tagi, notatka, nadpisania atrybutów)
+UI view = observation ⊕ active override (tags, note, attribute patches)
 ```
 
-Kolejny skan tworzy nową obserwację o tym samym kluczu, więc korekta pozostaje przypięta i widoczna. Korekty są wspólne dla zespołu; przy kilku korektach tego samego klucza obowiązuje najnowsza.
+The next scan creates a new observation with the same key, so the override stays attached. Overrides are shared; if a key has several, the newest wins.
 
-## Cykl życia
+## Lifecycle
 
-Po zakończeniu przebiegu API porównuje jego obserwacje z **poprzednim ukończonym przebiegiem o tym samym zestawie modułów i tej samej grupie** (dla skanów bez grupy: o identycznej liście celów).
+When a run finishes, the API compares its observations with the **previous completed run with the same modules and the same group** (for scans without a group: the same target list).
 
-| Stan | Warunek |
+| State | Condition |
 |---|---|
-| `NEW` | klucza nie było w przebiegu odniesienia (albo nie ma przebiegu odniesienia) |
-| `CHANGED` | klucz istnieje, atrybuty się różnią |
-| `UNCHANGED` | klucz istnieje, atrybuty bez zmian |
-| `FLAKY` | obserwacja wróciła po stanie `MISSING` / `FLAKY` / `GONE` **albo** brakuje jej drugi raz z rzędu |
-| `MISSING` | brak w pierwszym pełnym przebiegu |
-| `GONE` | brak w trzecim i kolejnych pełnych przebiegach |
+| `NEW` | key absent from the reference run (or no reference run) |
+| `CHANGED` | key exists, attributes differ |
+| `UNCHANGED` | key exists, attributes identical |
+| `FLAKY` | observation came back after `MISSING` / `FLAKY` / `GONE`, or is missing for the second time in a row |
+| `MISSING` | absent in the first full run |
+| `GONE` | absent in the third and later full runs |
 
-Dla obserwacji nieobecnych API tworzy w bieżącym przebiegu rekord z przeniesionymi atrybutami i licznikiem `miss_streak` zwiększonym o 1. Stany `MISSING` / `FLAKY` / `GONE` powstają tylko wtedy, gdy przebieg ma status `completed`; przebieg częściowy, anulowany lub nieudany nie obniża stanu.
+For absent observations the API creates a record in the current run with carried-over attributes and `miss_streak` increased by 1. `MISSING` / `FLAKY` / `GONE` are produced only when the run is `completed`; a partial, cancelled or failed run never lowers a state.
 
-Liczniki stanów trafiają do `ScanRun.result_summary.lifecycle`, a podsumowanie ciekawości do `result_summary.curiosity`.
+State counts go to `ScanRun.result_summary.lifecycle`, and the curiosity summary to `result_summary.curiosity`.
 
-## Relacja worker → API
+## Worker to API
 
-Worker nie ma dostępu do PostgreSQL. Wysyła wynik do `/api/internal/batches/{id}/complete/`, a API:
+The worker has no database access. It posts a result to `/api/internal/batches/{id}/complete/`, and the API:
 
-1. uwierzytelnia token serwisowy (`X-Worker-Token`) i sprawdza `delivery_id`;
-2. odrzuca wynik batcha wstrzymanego oknem czasowym (HTTP 409);
-3. zapisuje wynik w `ScanBatch.result` i tworzy obserwacje;
-4. szyfruje dowody (`FingerprintEvidence.ciphertext`);
-5. po zakończeniu przebiegu liczy cykl życia i zleca eksport do DefectDojo.
+1. authenticates the service token (`X-Worker-Token`) and checks `delivery_id`;
+2. rejects results for batches paused by the time window (HTTP 409);
+3. stores the result in `ScanBatch.result` and creates observations;
+4. encrypts evidence (`FingerprintEvidence.ciphertext`);
+5. when the run finishes, computes lifecycle states and triggers the DefectDojo export.

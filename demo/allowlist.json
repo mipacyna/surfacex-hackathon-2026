@@ -1,8 +1,0 @@
-{
-  "schema_version": 1,
-  "entries": [
-    { "value": "10.99.0.70", "entry_type": "ip", "comment": "lab-web-a" },
-    { "value": "10.99.0.71", "entry_type": "ip", "comment": "lab-web-b" },
-    { "value": "10.99.0.72", "entry_type": "ip", "comment": "lab-web-c" }
-  ]
-}

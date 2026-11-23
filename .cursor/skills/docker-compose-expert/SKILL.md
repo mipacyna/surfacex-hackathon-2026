@@ -12,7 +12,7 @@ description: Designs, reviews, secures, and troubleshoots Docker Compose stacks 
 - Support native `linux/amd64` and `linux/arm64`.
 - Support Linux Docker Engine; Docker Desktop on Intel/Apple Silicon macOS; Docker Desktop on Windows 10/11 with WSL2 and Linux containers.
 - Keep the complete MVP runnable locally without SaaS dependencies.
-- Read `docs/architecture.md` and `docs/mvp-plan.md` before structural changes.
+- Read `docs/architecture.md` before structural changes.
 
 ## Service boundaries
 
@@ -91,7 +91,7 @@ The worker must detect raw-socket support:
 7. Start only the affected services when possible.
 8. Wait for healthchecks and run the smoke test.
 9. Check logs for secret leakage, restart loops and permission errors.
-10. Update `docs/architecture.md` or `docs/local-platforms.md` when behavior changes.
+10. Update `docs/architecture.md` or `docs/operations.md` when behavior changes.
 
 ## Safety rules
 

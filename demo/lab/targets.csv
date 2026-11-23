@@ -1,8 +1,8 @@
 value,type,comment,group
-10.77.0.10,ip,Strona wydziału (CMS),Lab demo
-10.77.0.11,ip,Panel administracyjny,Lab demo
-10.77.0.12,ip,Środowisko staging,Lab demo
+10.77.0.10,ip,Faculty website (CMS),Lab demo
+10.77.0.11,ip,Admin panel,Lab demo
+10.77.0.12,ip,Staging environment,Lab demo
 10.77.0.13,ip,Intranet HTTPS,Lab demo
-10.77.0.14,ip,Kamera IP w laboratorium,Lab demo
-10.77.0.15,ip,Serwer pomiarowy (niestabilny),Lab demo
-10.77.0.16,ip,Rezerwacja adresu,Lab demo
+10.77.0.14,ip,IP camera in the lab,Lab demo
+10.77.0.15,ip,Measurement server (unstable),Lab demo
+10.77.0.16,ip,Reserved address,Lab demo
