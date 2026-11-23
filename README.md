@@ -122,3 +122,7 @@ Secrets, `.env`, `node_modules/`, `dist/` and local backups are never committed.
 SurfaceX only performs reconnaissance. It does not log in to services, guess passwords, exploit vulnerabilities or follow redirects. Scan only networks you are authorized to test. The allowlist enforces the scope.
 
 It runs as a local Docker Compose stack, with no high availability and no Kubernetes support. The default configuration is meant for local and lab use. See [docs/security.md](docs/security.md) for known limitations.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
